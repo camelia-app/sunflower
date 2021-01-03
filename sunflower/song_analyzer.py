@@ -3,13 +3,20 @@ import librosa
 
 
 class SongAnalyzer:
-    def __init__(self, song: Song, tempo: float = None, low_tempo: bool = True):
+    def __init__(
+        self,
+        song: Song,
+        tempo: float = None,
+        low_tempo: bool = True,
+        drop_beats: int = None,
+    ):
         """Creates a SongAnalyzer object.
 
         :param song: Song object
         :param tempo: Sets the BPM of the track
         :param low_tempo: Type of song to analyze.
         Setting the mode to True ensures to have a BPM lower to a threshold (110 BPM)
+        :param drop_beats: When the song drops
 
         """
 
@@ -24,6 +31,8 @@ class SongAnalyzer:
         self.low_tempo = low_tempo
         self.tempo = tempo
         self.beat_frames = None
+
+        self.drop_beats = drop_beats
 
     def detect_tempo(self):
         """Detects tempo of a track.
