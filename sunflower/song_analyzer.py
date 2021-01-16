@@ -1,4 +1,5 @@
 from .song_loader import Song
+import numpy as np
 import librosa
 
 
@@ -31,6 +32,12 @@ class SongAnalyzer:
         self.low_tempo = low_tempo
         self.tempo = tempo
         self.beat_frames = None
+
+        self.spectogram = None
+        self.time_index_ratio = None
+        self.frequencies_index_ratio = None
+
+        self.set_frequencies()
 
         self.drop_beats = drop_beats
 
@@ -69,4 +76,42 @@ class SongAnalyzer:
                 self.tempo = self.tempo / 2
 
         self.tempo = round(self.tempo, 0)
+
+    def set_frequencies(self):
+        """Choose the value by its time and frequency.
+        """
+
+        # getting a matrix which contains amplitude values according to frequency and time indexes
+        stft = np.abs(
+            librosa.stft(self.song.mono_waveform, hop_length=512, n_fft=2048 * 4)
+        )
+
+        self.spectrogram = librosa.amplitude_to_db(
+            stft, ref=np.max
+        )  # converting the matrix to decibel matrix
+
+        frequencies = librosa.core.fft_frequencies(
+            n_fft=2048 * 4
+        )  # getting an array of frequencies
+
+        # getting an array of time periodic
+        times = librosa.core.frames_to_time(
+            np.arange(self.song.waveform.shape[1]),
+            sr=self.song.sr,
+            hop_length=512,
+            n_fft=2048 * 4,
+        )
+
+        self.time_index_ratio = len(times) / times[len(times) - 1]
+
+        self.frequencies_index_ratio = (
+            len(frequencies) / frequencies[len(frequencies) - 1]
+        )
+
+    def get_decibel(self, target_time, freq):
+        """Multiply the time and the frequency we want by the ratio to get the indexes.
+        """
+        return self.spectrogram[int(freq * self.frequencies_index_ratio)][
+            int(target_time * self.time_index_ratio)
+        ]
 
