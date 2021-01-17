@@ -10,6 +10,7 @@ from sunflower.utils import export_wav
 from sunflower.benchmark import run_benchmark
 from sunflower.song_visualizer import visualize_waveform, visualize_waveform_plotly
 from moviepy.editor import *
+from moviepy.audio.AudioClip import AudioArrayClip
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
@@ -20,7 +21,7 @@ import pygame
 # %%
 # Loading example file
 
-raw_audio, extension = load_from_disk("../data_benchmark/piano_loop.wav")
+raw_audio, extension = load_from_disk("../data_benchmark/drums.wav")
 
 song = Song(raw_audio, extension)
 
@@ -50,7 +51,7 @@ class AudioBar:
         y,
         freq,
         decibel,
-        color,
+        color=(0, 0, 0),
         width=50,
         min_height=10,
         max_height=100,
@@ -77,20 +78,16 @@ class AudioBar:
         self.height = clamp(self.min_height, self.max_height, desired_height)
 
 
-def draw_rectangle(audiobar, frame):
+def draw_rectangle(frame, audiobar):
     """Draw a rectangle in the frame.
     """
 
     # Change (top, bottom, left, right) to your coordinates
-    left = audiobar.x
-    right = left + audiobar.width
+    left = int(audiobar.x)
+    right = left + int(audiobar.width)
     bottom = 0
-    top = bottom + audiobar.height
-
-    frame[audiobar.top, left:right] = audiobar.color
-    frame[bottom, left:right] = audiobar.color
-    frame[top:bottom, left] = audiobar.color
-    frame[top:bottom, right] = audiobar.color
+    top = int(bottom) + int(audiobar.height)
+    frame[bottom:top, left:right] = audiobar.color
 
     return frame
 
@@ -103,17 +100,54 @@ def color_clip(size, duration, fps=25, color=(50, 50, 50)):
     return ColorClip(size, color, duration=duration)
 
 
-size = (200, 200)
-duration = 10
-clip = color_clip(size, duration)
+frequencies = np.arange(100, 8000, 100)
+size = (400, 400)
+audioclip = AudioArrayClip(song.waveform.reshape(-1, 2), song.sr)
+duration = audioclip.duration
 
-clip.preview()
+fps_equalizer = 0.01
+time = 0
+width = 1
+clips = []
 
+while len(clips) * fps_equalizer < duration:
+    x = 0
+    clip = color_clip(size, fps_equalizer)
+
+    for c in frequencies:
+
+        clip = clip.fl_image(
+            lambda image: draw_rectangle(
+                image,
+                AudioBar(
+                    x,
+                    300,
+                    c,
+                    song_analyzer.get_decibel(time, c),
+                    max_height=400,
+                    width=width,
+                ),
+            )
+        )
+
+        x += width
+
+    clip = clip.set_duration(fps_equalizer).set_start(time)
+    clips.append(clip)
+
+    time += fps_equalizer
+
+clip = CompositeVideoClip(clips)
+clip = clip.set_audio(audioclip)
 
 # %%
-pygame.quit()
-# %%
-clip = VideoFileClip("<path to file>")
-final_clip = clip.fl_image(draw_rectangle)
+clip.write_videofile(
+    "eq.mp4",
+    fps=24,
+    temp_audiofile="../temp-audio.m4a",
+    remove_temp=True,
+    codec="libx264",
+    audio_codec="aac",
+)
 # %%
 # getting a matrix which contains amplitude values according to frequency and time indexes
