@@ -2,6 +2,10 @@ from .song_loader import Song
 import numpy as np
 import librosa
 
+BASS_RANGE = {"start": 50, "stop": 100}
+HEAVY_RANGE = {"start": 101, "stop": 250}
+FREQUENCY_RANGES = [BASS_RANGE, HEAVY_RANGE]
+
 
 class SongAnalyzer:
     def __init__(
@@ -116,4 +120,45 @@ class SongAnalyzer:
         return self.spectrogram[int(freq * self.frequencies_index_ratio)][
             int(target_time * self.time_index_ratio)
         ]
+
+    def get_avg_decibel_frequencies(self, rate_frequencies=1 / 10, rate_duration=1 / 4):
+        """Get average frequencies.
+        """
+
+        results = []
+
+        # Timestamps to compute energy
+        beat_duration = 60 / self.tempo
+        song_duration = librosa.get_duration(self.song.waveform, sr=self.song.sr)
+        timestamps = np.linspace(
+            0, song_duration, int(song_duration / (beat_duration * rate_duration))
+        )
+
+        # Iterating on all the possible ranges (e.g. bass, heavy, mid, high etc.)
+        for freq_range in FREQUENCY_RANGES:
+
+            list_db = []
+
+            # Sub-range of frequencies to study
+            step = np.ceil(
+                (freq_range["stop"] - freq_range["start"]) * rate_frequencies
+            )
+
+            start = freq_range["start"]
+            stop = start + step
+
+            while stop <= freq_range["stop"]:
+
+                for timestamp in timestamps:
+
+                    # Computing db at the start of the window
+                    db = self.get_decibel(timestamp, start)
+                    list_db.append(db)
+
+                start = stop
+                stop = start + step
+
+            results.append(np.mean(list_db))
+
+        return results
 
