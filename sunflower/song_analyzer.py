@@ -2,8 +2,8 @@ from .song_loader import Song
 import numpy as np
 import librosa
 
-BASS_RANGE = {"start": 50, "stop": 100}
-HEAVY_RANGE = {"start": 101, "stop": 250}
+BASS_RANGE = {"name": "bass", "start": 50, "stop": 100}
+HEAVY_RANGE = {"name": "heavy_range", "start": 101, "stop": 250}
 FREQUENCY_RANGES = [BASS_RANGE, HEAVY_RANGE]
 
 
@@ -30,7 +30,7 @@ class SongAnalyzer:
 
         self.song = song
 
-        #################
+        ######################
         # Features
 
         self.low_tempo = low_tempo
@@ -44,6 +44,9 @@ class SongAnalyzer:
         self.set_frequencies()
 
         self.drop_beats = drop_beats
+
+        ######################
+        # Features
 
     def detect_tempo(self):
         """Detects tempo of a track.
@@ -121,11 +124,15 @@ class SongAnalyzer:
             int(target_time * self.time_index_ratio)
         ]
 
-    def get_avg_decibel_frequencies(self, rate_frequencies=1 / 10, rate_duration=1 / 4):
+    def process_decibel_per_frequencies(
+        self, rate_frequencies=1 / 10, rate_duration=1 / 16, mode="avg"
+    ):
         """Get average frequencies.
-        """
 
-        results = []
+        :param mode: Options: avg, peak
+        :param rate_frequencies: 
+        :param rate_duration: % of the bpm duration
+        """
 
         # Timestamps to compute energy
         beat_duration = 60 / self.tempo
@@ -133,6 +140,11 @@ class SongAnalyzer:
         timestamps = np.linspace(
             0, song_duration, int(song_duration / (beat_duration * rate_duration))
         )
+
+        if mode == "peak":
+            results = [timestamps]
+        else:
+            results = []
 
         # Iterating on all the possible ranges (e.g. bass, heavy, mid, high etc.)
         for freq_range in FREQUENCY_RANGES:
@@ -144,21 +156,36 @@ class SongAnalyzer:
                 (freq_range["stop"] - freq_range["start"]) * rate_frequencies
             )
 
-            start = freq_range["start"]
-            stop = start + step
+            for timestamp in timestamps:
 
-            while stop <= freq_range["stop"]:
-
-                for timestamp in timestamps:
-
-                    # Computing db at the start of the window
-                    db = self.get_decibel(timestamp, start)
-                    list_db.append(db)
-
-                start = stop
+                start = freq_range["start"]
                 stop = start + step
 
-            results.append(np.mean(list_db))
+                # Store all the db computed for the frequency range
+                list_db_range = []
+
+                while stop <= freq_range["stop"]:
+
+                    # Computing db at the start of the window
+                    db = (
+                        self.get_decibel(timestamp, start)
+                        + self.get_decibel(timestamp, start + (stop - start) / 2)
+                    ) / 2
+
+                    list_db_range.append(db)
+                    start = stop
+                    stop = start + step
+
+                list_db.append(np.array(list_db_range).mean())
+
+            if mode == "avg":
+
+                results.append(np.mean(list_db))
+
+            elif mode == "peak":
+
+                reference_value = np.mean(list_db)
+                list_db = np.where(list_db < reference_value, 0, 1)
+                results.append(list_db)
 
         return results
-
