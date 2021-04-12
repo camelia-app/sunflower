@@ -4,17 +4,11 @@ import librosa
 
 BASS_RANGE = {"name": "bass", "start": 50, "stop": 80}
 HEAVY_RANGE = {"name": "heavy_range", "start": 101, "stop": 250}
-FREQUENCY_RANGES = [BASS_RANGE, HEAVY_RANGE]
+WHOLE_SPECTRUM_RANGE = {"name": "bass", "start": 20, "stop": 12000}
 
 
 class SongAnalyzer:
-    def __init__(
-        self,
-        song: Song,
-        tempo: float = None,
-        low_tempo: bool = True,
-        drop_beats: int = None,
-    ):
+    def __init__(self, song: Song, tempo: float = None, low_tempo: bool = True):
         """Creates a SongAnalyzer object.
 
         :param song: Song object
@@ -43,7 +37,7 @@ class SongAnalyzer:
 
         self.set_frequencies()
 
-        self.drop_beats = drop_beats
+        self.drop_beats = None
 
         ######################
         # Features
@@ -125,14 +119,26 @@ class SongAnalyzer:
         ]
 
     def process_decibel_per_frequencies(
-        self, rate_frequencies=1 / 10, rate_duration=1 / 4, mode="avg"
+        self,
+        rate_frequencies=1,
+        rate_duration=1 / 4,
+        mode="avg",
+        freq_study: str = "bass",
     ):
         """Get average frequencies.
 
         :param mode: Options: avg, peak
         :param rate_frequencies: 
         :param rate_duration: % of the bpm duration
+        :param freq_range: frequence range to study
         """
+
+        if freq_study == "bass":
+            freq_range = BASS_RANGE
+        elif freq_study == "whole":
+            freq_range = WHOLE_SPECTRUM_RANGE
+        else:
+            raise ValueError("Please provide a correct frequency range to study")
 
         # Note: These timestramps cant be computed with np.linspace
         # We know the song starts at the beginning of a measure, but we don't know it it
@@ -169,47 +175,50 @@ class SongAnalyzer:
         else:
             results = []
 
-        # Iterating on all the possible ranges (e.g. bass, heavy, mid, high etc.)
-        for freq_range in FREQUENCY_RANGES:
+        list_db = []
 
-            list_db = []
+        # Sub-range of frequencies to study
+        step = np.ceil((freq_range["stop"] - freq_range["start"]) * rate_frequencies)
 
-            # Sub-range of frequencies to study
-            step = np.ceil(
-                (freq_range["stop"] - freq_range["start"]) * rate_frequencies
-            )
+        for timestamp in timestamps:
 
-            for timestamp in timestamps:
+            start = freq_range["start"]
+            stop = start + step
 
-                start = freq_range["start"]
+            # Store all the db computed for the frequency range
+            list_db_range = []
+
+            # It is sometimes useful to not consider the whole freq_range, but
+            # segment it
+
+            while stop <= freq_range["stop"]:
+
+                # Computing db at the start of the window
+                db = (
+                    self.get_decibel(timestamp, start)
+                    + self.get_decibel(timestamp, start + (stop - start) / 2)
+                ) / 2
+
+                list_db_range.append(db)
+                start = stop
                 stop = start + step
 
-                # Store all the db computed for the frequency range
-                list_db_range = []
+            list_db.append(np.array(list_db_range).mean())
 
-                while stop <= freq_range["stop"]:
+        if mode == "avg":
 
-                    # Computing db at the start of the window
-                    db = (
-                        self.get_decibel(timestamp, start)
-                        + self.get_decibel(timestamp, start + (stop - start) / 2)
-                    ) / 2
+            results.append(np.mean(list_db))
 
-                    list_db_range.append(db)
-                    start = stop
-                    stop = start + step
+        elif mode == "peak":
 
-                list_db.append(np.array(list_db_range).mean())
-
-            if mode == "avg":
-
-                results.append(np.mean(list_db))
-
-            elif mode == "peak":
-
-                # reference_value = np.mean(list_db)
-                reference_value = np.percentile(list_db, 95)
-                list_db = np.where(list_db < reference_value, 0, 1)
-                results.append(list_db)
+            reference_value = np.percentile(list_db, 95)
+            list_db = np.where(list_db < reference_value, 0, 1)
+            results.append(list_db)
 
         return results
+
+    def set_drop(self, drop_beats: float) -> None:
+        """Set drop.
+        """
+
+        self.drop_beats = drop_beats
