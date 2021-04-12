@@ -122,6 +122,8 @@ class SongAnalyzer:
         rate_duration=1 / 16,
         mode="peak",
         freq_study: str = "bass",
+        sensibility=None,
+        drop_time=0,
     ):
         """Get average frequencies.
 
@@ -154,6 +156,9 @@ class SongAnalyzer:
 
             timestamps.append(timestamp_meas)
             timestamp_meas += beat_duration * rate_duration
+
+        if sensibility is None:
+            raise ValueError("Automatic sensibility computing not implemented yet")
 
         # Timestamps corresponding to each measure start
 
@@ -207,7 +212,7 @@ class SongAnalyzer:
 
         elif mode == "peak":
 
-            reference_value = np.percentile(list_db, 95)
+            reference_value = np.percentile(list_db, sensibility)
             list_db = np.where(list_db < reference_value, 0, 1)
             results.append(list_db)
 
