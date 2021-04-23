@@ -39,6 +39,7 @@ class Song:
         self.channels = None
         self.sr = None
         self.sample_width = None
+        self.bitrate = None
 
         self.load_from_filelike(filelike, extension)
 
@@ -91,6 +92,8 @@ class Song:
 
         self.sr = a.frame_rate
 
+        self.bitrate = compute_bitrate(self.sr, self.sample_width, self.channels)
+
     def print_attributes(self) -> None:
         """Print attributes of the object."""
 
@@ -116,7 +119,21 @@ class Song:
 
 
 def normalize(waveform, sample_width):
-    return waveform / (sample_width ** 15)
+    """Normalize waveform.
+    """
+
+    return waveform / (2 ** (8 * sample_width - 1))
+
+
+def compute_bitrate(frame_rate, frame_width, channels):
+    """Formula to compute bitrate.
+
+    Source: https://stackoverflow.com/questions/33747728/how-can-i-get-the-same-bitrate-of-input-and-output-file-in-pydub
+    """
+
+    bitrate = (frame_rate * frame_width * 8 * channels) / 1000
+
+    return bitrate
 
 
 def allowed_file(filename: str) -> (bool, str):

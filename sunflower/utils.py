@@ -3,10 +3,10 @@ import soundfile as sf
 import numpy as np
 
 
-def export_wav(song: Song):
+def export_wav(song: Song, path):
     """TO DO: Move this function somewhere else. 
     
     --- Just used for tests atm ---
     """
 
-    sf.write("../data/processedfile.wav", song.waveform, song.sr, subtype="FLOAT")
+    sf.write(path, song.waveform.reshape(-1, song.channels), song.sr, subtype="FLOAT")
